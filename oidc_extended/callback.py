@@ -11,12 +11,13 @@ import jwt
 import frappe
 import frappe.utils
 from frappe import _ # For translations
+from frappe.utils.oauth import consume_oauth_state, get_info_via_oauth
 
 frappe.utils.logger.set_log_level("INFO")
 #frappe.utils.logger.set_log_level("DEBUG")
 
 @frappe.whitelist(allow_guest=True)
-def custom(code: str, state: str | dict):
+def custom(code: str, state: str):
     """Callback for processing the request received after a successful authentication in an identity provider (OIDC provider).
 
     OIDC redirect URL: /api/method/oidc_extended.callback.custom/<provider name>
@@ -26,10 +27,9 @@ def custom(code: str, state: str | dict):
     - Maps groups from the claim of id token to ERPNext roles.
     """
 
-    state = json.loads(base64.b64decode(state).decode("utf-8"))
-
-    if not state or not state["token"]:
-        frappe.respond_as_web_page(_("Invalid request"), _("Token is missing."), http_status_code=417)
+    redirect_to = consume_oauth_state(state)
+    if redirect_to is None:
+        frappe.respond_as_web_page(_("Invalid request"), _("The login attempt is invalid or has expired."), http_status_code=417)
         return
 
     request_path_components = frappe.request.path[1:].split("/")
@@ -52,22 +52,8 @@ def custom(code: str, state: str | dict):
     email_claim_name = oidc_extended_configuration.email_claim_name or "email"
     groups_claim_name = oidc_extended_configuration.groups_claim_name or "groups"
 
-    token_request_data = {
-        "grant_type": "authorization_code",
-        "client_id": social_login_provider.client_id,
-        "client_secret": social_login_provider.get_password("client_secret"),
-        "scope": json.loads(social_login_provider.auth_url_data).get("scope"),
-        "code": code,
-        "redirect_uri": frappe.utils.get_url(social_login_provider.redirect_url), # Combines ERPNext URL with redirect URL.
-    }
-
-    # Requests token from token endpoint.
-    token_response = requests.post(
-        url=social_login_provider.base_url + social_login_provider.access_token_url,
-        data=token_request_data,
-    ).json()
-
-    id_token = jwt.decode(token_response["id_token"], audience="erpnext", options={"verify_signature": False})
+    # Use Frappe's configured OAuth flow and server-side token exchange.
+    id_token = get_info_via_oauth(provider_name, code, id_token=True)
     username = id_token[user_id_claim_name]
 
     if email_claim_name in id_token:
@@ -210,7 +196,7 @@ def custom(code: str, state: str | dict):
 
     redirect_post_login(
         desk_user=frappe.local.response.get("message") == "Logged In",
-        redirect_to=state.get("redirect_to")
+        redirect_to=redirect_to
     )
 
 def redirect_post_login(desk_user: bool, redirect_to: str):

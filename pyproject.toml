@@ -1,16 +1,15 @@
 [project]
 name = "oidc_extended"
-authors = [
-    { name = "Mohammed Noureldin", email = "contact@mohammednoureldin.com"}
-]
-description = "An extension to the ERPNext Social Login authentication method (OIDC) that incorporates new features designed to meet the needs of enterprises."
-requires-python = ">=3.10"
+authors = [{name = "Mohammed Noureldin", email = "contact@mohammednoureldin.com"}]
+description = "OIDC group, role and module profile integration for Frappe"
+requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]
-
-[tool.bench.frappe-dependencies]
-frappe = "<=17.0.0-dev"
+dependencies = ["PyJWT~=2.13.0", "requests~=2.33.0"]
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["flit_core>=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0,<17.0.0"
